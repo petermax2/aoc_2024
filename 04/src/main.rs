@@ -119,6 +119,51 @@ impl<'a> PuzzleNavigator<'a> {
         xmas_count
     }
 
+    pub fn mas_count_crossed(&self) -> u64 {
+        let mut xed_mas_count: u64 = 0;
+        for line in 1..self.lines {
+            for pos in 1..self.line_len {
+                if let Some(c) = self.get(line, pos) {
+                    if c == b'A' {
+                        let ne = SearchDirection::NorthEast.next_pos(line, pos);
+                        let nw = SearchDirection::NorthWest.next_pos(line, pos);
+                        let se = SearchDirection::SouthEast.next_pos(line, pos);
+                        let sw = SearchDirection::SouthWest.next_pos(line, pos);
+
+                        if ne.is_some() && nw.is_some() && se.is_some() && sw.is_some() {
+                            let ne = ne.unwrap();
+                            let nw = nw.unwrap();
+                            let se = se.unwrap();
+                            let sw = sw.unwrap();
+
+                            let ne = self.get(ne.0, ne.1);
+                            let nw = self.get(nw.0, nw.1);
+                            let se = self.get(se.0, se.1);
+                            let sw = self.get(sw.0, sw.1);
+
+                            if ne.is_some() && nw.is_some() && se.is_some() && sw.is_some() {
+                                let ne = ne.unwrap();
+                                let nw = nw.unwrap();
+                                let se = se.unwrap();
+                                let sw = sw.unwrap();
+
+                                let diagonal1_mas =
+                                    (ne == b'S' && sw == b'M') || (ne == b'M' && sw == b'S');
+                                let diagonal2_mas =
+                                    (nw == b'S' && se == b'M') || (nw == b'M' && se == b'S');
+
+                                if diagonal1_mas && diagonal2_mas {
+                                    xed_mas_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        xed_mas_count
+    }
+
     fn get(&self, line: usize, pos: usize) -> Option<u8> {
         if line < self.lines && pos < self.line_len {
             Some(self.puzzle[line][pos])
@@ -173,6 +218,8 @@ fn main() {
 
     let navigator = PuzzleNavigator::new(&input);
     let xmas_count = navigator.xmas_count();
+    let crossed_mas_count = navigator.mas_count_crossed();
 
     println!("{xmas_count}");
+    println!("{crossed_mas_count}");
 }
