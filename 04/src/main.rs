@@ -2,18 +2,18 @@ use std::io;
 
 type Puzzle = Vec<Vec<u8>>;
 
+const X: u8 = b'X';
+const M: u8 = b'M';
+const A: u8 = b'A';
+const S: u8 = b'S';
+
 fn read_input_from_stdin() -> Puzzle {
-    let mut line = String::new();
-    let mut input = Vec::new();
-    let stdin = io::stdin();
-    while stdin.read_line(&mut line).is_ok() {
-        if line.trim().is_empty() {
-            break;
-        }
-        input.push(line.clone().into_bytes());
-        line.clear();
-    }
-    input
+    io::stdin()
+        .lines()
+        .filter_map(|line| line.ok())
+        .map(|line| line.into_bytes())
+        .take_while(|line| !line.is_empty())
+        .collect()
 }
 
 #[derive(Debug)]
@@ -29,46 +29,27 @@ enum SearchDirection {
 }
 
 impl SearchDirection {
+    pub fn offset(&self) -> (isize, isize) {
+        match self {
+            Self::North => (-1, 0),
+            Self::NorthEast => (-1, 1),
+            Self::East => (0, 1),
+            Self::SouthEast => (1, 1),
+            Self::South => (1, 0),
+            Self::SouthWest => (1, -1),
+            Self::West => (0, -1),
+            Self::NorthWest => (-1, -1),
+        }
+    }
+
     pub fn next_pos(&self, line: usize, pos: usize) -> Option<(usize, usize)> {
-        match &self {
-            SearchDirection::North => {
-                if line > 0 {
-                    Some((line - 1, pos))
-                } else {
-                    None
-                }
-            }
-            SearchDirection::NorthEast => {
-                if line > 0 {
-                    Some((line - 1, pos + 1))
-                } else {
-                    None
-                }
-            }
-            SearchDirection::East => Some((line, pos + 1)),
-            SearchDirection::SouthEast => Some((line + 1, pos + 1)),
-            SearchDirection::South => Some((line + 1, pos)),
-            SearchDirection::SouthWest => {
-                if pos > 0 {
-                    Some((line + 1, pos - 1))
-                } else {
-                    None
-                }
-            }
-            SearchDirection::West => {
-                if pos > 0 {
-                    Some((line, pos - 1))
-                } else {
-                    None
-                }
-            }
-            SearchDirection::NorthWest => {
-                if pos > 0 && line > 0 {
-                    Some((line - 1, pos - 1))
-                } else {
-                    None
-                }
-            }
+        let (dx, dy) = self.offset();
+        let new_line = line as isize + dx;
+        let new_pos = pos as isize + dy;
+        if new_line >= 0 && new_pos >= 0 {
+            Some((new_line as usize, new_pos as usize))
+        } else {
+            None
         }
     }
 }
@@ -103,7 +84,7 @@ impl<'a> PuzzleNavigator<'a> {
         for line in 0..self.lines {
             for pos in 0..self.line_len {
                 if let Some(c) = self.get(line, pos) {
-                    if c == b'X' {
+                    if c == X {
                         xmas_count += self.detect_mas(SearchDirection::East, line, pos);
                         xmas_count += self.detect_mas(SearchDirection::North, line, pos);
                         xmas_count += self.detect_mas(SearchDirection::NorthEast, line, pos);
@@ -120,42 +101,29 @@ impl<'a> PuzzleNavigator<'a> {
     }
 
     pub fn mas_count_crossed(&self) -> u64 {
-        let mut xed_mas_count: u64 = 0;
+        let mut xed_mas_count = 0;
+
         for line in 1..self.lines {
             for pos in 1..self.line_len {
-                if let Some(c) = self.get(line, pos) {
-                    if c == b'A' {
-                        let ne = SearchDirection::NorthEast.next_pos(line, pos);
-                        let nw = SearchDirection::NorthWest.next_pos(line, pos);
-                        let se = SearchDirection::SouthEast.next_pos(line, pos);
-                        let sw = SearchDirection::SouthWest.next_pos(line, pos);
+                if let Some(A) = self.get(line, pos) {
+                    let diagonals = [
+                        SearchDirection::NorthEast,
+                        SearchDirection::NorthWest,
+                        SearchDirection::SouthEast,
+                        SearchDirection::SouthWest,
+                    ];
 
-                        if ne.is_some() && nw.is_some() && se.is_some() && sw.is_some() {
-                            let ne = ne.unwrap();
-                            let nw = nw.unwrap();
-                            let se = se.unwrap();
-                            let sw = sw.unwrap();
+                    let chars: Vec<_> = diagonals
+                        .iter()
+                        .filter_map(|dir| dir.next_pos(line, pos))
+                        .filter_map(|(line, pos)| self.get(line, pos))
+                        .collect();
 
-                            let ne = self.get(ne.0, ne.1);
-                            let nw = self.get(nw.0, nw.1);
-                            let se = self.get(se.0, se.1);
-                            let sw = self.get(sw.0, sw.1);
-
-                            if ne.is_some() && nw.is_some() && se.is_some() && sw.is_some() {
-                                let ne = ne.unwrap();
-                                let nw = nw.unwrap();
-                                let se = se.unwrap();
-                                let sw = sw.unwrap();
-
-                                let diagonal1_mas =
-                                    (ne == b'S' && sw == b'M') || (ne == b'M' && sw == b'S');
-                                let diagonal2_mas =
-                                    (nw == b'S' && se == b'M') || (nw == b'M' && se == b'S');
-
-                                if diagonal1_mas && diagonal2_mas {
-                                    xed_mas_count += 1;
-                                }
-                            }
+                    if chars.len() == 4 {
+                        if (chars[0] == S && chars[3] == M || chars[0] == M && chars[3] == S)
+                            && (chars[1] == S && chars[2] == M || chars[1] == M && chars[2] == S)
+                        {
+                            xed_mas_count += 1;
                         }
                     }
                 }
@@ -173,43 +141,20 @@ impl<'a> PuzzleNavigator<'a> {
     }
 
     fn detect_mas(&self, direction: SearchDirection, line: usize, pos: usize) -> u64 {
-        if let Some((line, pos)) = direction.next_pos(line, pos) {
-            if let Some(x) = self.get(line, pos) {
-                if x != b'M' {
-                    return 0;
-                }
-            } else {
-                return 0;
-            }
-
-            if let Some((line, pos)) = direction.next_pos(line, pos) {
-                if let Some(x) = self.get(line, pos) {
-                    if x != b'A' {
-                        return 0;
-                    }
-                } else {
-                    return 0;
-                }
-
-                if let Some((line, pos)) = direction.next_pos(line, pos) {
-                    if let Some(x) = self.get(line, pos) {
-                        if x != b'S' {
-                            return 0;
-                        }
-                    } else {
-                        return 0;
-                    }
-                } else {
-                    return 0;
-                }
-            } else {
-                return 0;
-            }
-        } else {
-            return 0;
-        }
-
-        1
+        direction
+            .next_pos(line, pos)
+            .and_then(|(line, pos)| {
+                self.get(line, pos).filter(|c| *c == M).and_then(|_| {
+                    direction.next_pos(line, pos).and_then(|(line, pos)| {
+                        self.get(line, pos).filter(|c| *c == A).and_then(|_| {
+                            direction
+                                .next_pos(line, pos)
+                                .and_then(|(line, pos)| self.get(line, pos).filter(|c| *c == S))
+                        })
+                    })
+                })
+            })
+            .map_or(0, |_| 1)
     }
 }
 
