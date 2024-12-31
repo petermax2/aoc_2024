@@ -1,7 +1,10 @@
 use std::{collections::HashMap, io::Read};
 
-const SOLUTION_CAPACITY: usize = 100;
-const QUEUE_CAPACITY: usize = 300;
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::alphanumeric1, combinator::value,
+    multi::separated_list1, sequence::tuple, IResult,
+};
+
 const INPUT_CAPACITY: usize = 5120;
 
 #[derive(Debug, Clone)]
@@ -9,6 +12,17 @@ enum Operator {
     And,
     Or,
     Xor,
+}
+
+impl From<&str> for Operator {
+    fn from(value: &str) -> Self {
+        match value.trim() {
+            "AND" => Operator::And,
+            "XOR" => Operator::Xor,
+            "OR" => Operator::Or,
+            op => panic!("Unsupported operator: {op}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -27,13 +41,6 @@ struct Puzzle {
 }
 
 impl Puzzle {
-    pub fn new() -> Self {
-        Self {
-            solution: HashMap::with_capacity(SOLUTION_CAPACITY),
-            queue: Vec::with_capacity(QUEUE_CAPACITY),
-        }
-    }
-
     pub fn solve_part1(&self) -> u64 {
         let mut solution = self.solution.clone();
         let mut queue = self.queue.clone();
@@ -72,67 +79,60 @@ impl Puzzle {
             .sum()
     }
 
-    pub fn solve_part2(&self) -> u64 {
-        todo!()
+    pub fn solve_part2(&self) -> String {
+        let result: Vec<String> = Vec::new();
+
+        // TODO finish part 2
+
+        assert!(result.len() == 8);
+        result.join(",")
+    }
+
+    fn parse_solution(input: &str) -> IResult<&str, (String, u8)> {
+        let (input, (name, _, digit)) = tuple((
+            alphanumeric1,
+            tag(": "),
+            alt((value(0_u8, tag("0")), value(1_u8, tag("1")))),
+        ))(input)?;
+
+        Ok((input, (name.to_string(), digit)))
+    }
+
+    fn parse_sentence(input: &str) -> IResult<&str, Sentence> {
+        let (input, (operand1, operator, operand2, _, result)) = tuple((
+            alphanumeric1,
+            alt((tag(" AND "), tag(" XOR "), tag(" OR "))),
+            alphanumeric1,
+            tag(" -> "),
+            alphanumeric1,
+        ))(input)?;
+
+        Ok((
+            input,
+            Sentence {
+                operator: operator.into(),
+                operand1: operand1.to_string(),
+                operand2: operand2.to_string(),
+                result: result.to_string(),
+                solved: false,
+            },
+        ))
     }
 }
 
 impl From<String> for Puzzle {
     fn from(value: String) -> Self {
-        let mut puzzle = Puzzle::new();
+        let (_, (solution, _, queue)) = tuple((
+            separated_list1(tag("\n"), Puzzle::parse_solution),
+            tag("\n\n"),
+            separated_list1(tag("\n"), Puzzle::parse_sentence),
+        ))(&value)
+        .unwrap();
 
-        let regex_solution = regex::Regex::new(r"(.*): (\d)").unwrap();
-        let regex_and = regex::Regex::new(r"^(.*) AND (.*) -> (.*)$").unwrap();
-        let regex_xor = regex::Regex::new(r"^(.*) XOR (.*) -> (.*)$").unwrap();
-        let regex_or = regex::Regex::new(r"^(.*) OR (.*) -> (.*)$").unwrap();
-
-        value.lines().for_each(|l| {
-            if regex_solution.is_match(l) {
-                for (_, [name, val]) in regex_solution.captures_iter(l).map(|c| c.extract()) {
-                    let val = val.trim();
-                    if val == "0" {
-                        puzzle.solution.insert(name.to_string(), 0);
-                    } else if val == "1" {
-                        puzzle.solution.insert(name.to_string(), 1);
-                    }
-                }
-            }
-            if regex_and.is_match(l) {
-                for (_, [op1, op2, res]) in regex_and.captures_iter(l).map(|c| c.extract()) {
-                    puzzle.queue.push(Sentence {
-                        operator: Operator::And,
-                        operand1: op1.to_string(),
-                        operand2: op2.to_string(),
-                        result: res.to_string(),
-                        solved: false,
-                    })
-                }
-            }
-            if regex_xor.is_match(l) {
-                for (_, [op1, op2, res]) in regex_xor.captures_iter(l).map(|c| c.extract()) {
-                    puzzle.queue.push(Sentence {
-                        operator: Operator::Xor,
-                        operand1: op1.to_string(),
-                        operand2: op2.to_string(),
-                        result: res.to_string(),
-                        solved: false,
-                    })
-                }
-            }
-            if regex_or.is_match(l) {
-                for (_, [op1, op2, res]) in regex_or.captures_iter(l).map(|c| c.extract()) {
-                    puzzle.queue.push(Sentence {
-                        operator: Operator::Or,
-                        operand1: op1.to_string(),
-                        operand2: op2.to_string(),
-                        result: res.to_string(),
-                        solved: false,
-                    })
-                }
-            }
-        });
-
-        puzzle
+        Puzzle {
+            solution: solution.into_iter().collect(),
+            queue,
+        }
     }
 }
 
@@ -148,6 +148,8 @@ fn main() {
     let puzzle = Puzzle::from(input);
 
     let solution1 = puzzle.solve_part1();
-
     println!("{solution1}");
+
+    let solution2 = puzzle.solve_part2();
+    println!("{solution2}");
 }
